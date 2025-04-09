@@ -648,25 +648,44 @@ function App() {
   const [xp, setXp] = useState(0);                               // Current XP accumulated
   const [repInputs, setRepInputs] = useState([]);                // Input values for reps per exercise on current day
   const [rankUpMessage, setRankUpMessage] = useState("");        // Rank-up congratulatory message (if any)
+  const [isLoaded, setIsLoaded] = useState(false);
 
 useEffect(() => {
-  const fetchProgress = async () => {
+  const loadProgress = async () => {
+    console.log("📦 Loading saved progress...");
+
     const { data, error } = await supabase
       .from('progress')
       .select('current_xp, current_rank')
-      .eq('user_id', '40f105cc-47d6-439a-9bad-4304386007e3') // Replace with real user ID later
+      .eq('user_id', '40f105cc-47d6-439a-9bad-4304386007e3')
       .single();
 
-    if (error) {
-      console.error('Failed to fetch progress:', error);
+    if (error && error.code === 'PGRST116') {
+      // Row doesn't exist yet, insert default one
+      console.log("⚠️ No progress found, creating default row...");
+      const { error: insertError } = await supabase.from('progress').insert({
+        user_id: '40f105cc-47d6-439a-9bad-4304386007e3',
+        current_xp: 0,
+        current_rank: 0
+      });
+
+      if (insertError) {
+        console.error("❌ Failed to insert new progress row:", insertError.message);
+      } else {
+        console.log("✅ Default progress row created.");
+      }
     } else if (data) {
+      console.log("✅ Loaded progress from Supabase:", data);
       setXp(data.current_xp);
       setCurrentRankIndex(data.current_rank);
       setViewRankIndex(data.current_rank);
+      setIsLoaded(true);
+    } else if (error) {
+      console.error("❌ Error loading progress:", error.message);
     }
   };
 
-  fetchProgress();
+  loadProgress();
 }, []);
 
 
@@ -678,20 +697,34 @@ useEffect(() => {
   }, [viewRankIndex, selectedDayIndex]);
   
 useEffect(() => {
+  if (!isLoaded) return; // ✅ Don't run this unless data has finished loading
+
   const saveProgress = async () => {
+    console.log('🔁 Trying to save to Supabase:', { xp, currentRankIndex });
+
     const { error } = await supabase
       .from('progress')
       .upsert({
-        user_id: '40f105cc-47d6-439a-9bad-4304386007e3', // Replace with real user ID later
+        user_id: '40f105cc-47d6-439a-9bad-4304386007e3',
         current_xp: xp,
         current_rank: currentRankIndex,
+      }, {
+        onConflict: ['user_id']
       });
 
-    if (error) console.error('Failed to save progress:', error);
+    if (error) {
+      console.error('❌ Failed to save progress:', error.message);
+    } else {
+      console.log('✅ Successfully saved progress!');
+    }
   };
 
   saveProgress();
-}, [xp, currentRankIndex]);
+}, [xp, currentRankIndex, isLoaded]); // ✅ Include isLoaded here
+
+
+
+
 
 
   // Handle completing a workout day to gain XP
