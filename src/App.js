@@ -649,16 +649,22 @@ function App() {
   const [repInputs, setRepInputs] = useState([]);                // Input values for reps per exercise on current day
   const [rankUpMessage, setRankUpMessage] = useState("");        // Rank-up congratulatory message (if any)
   const [isLoaded, setIsLoaded] = useState(false);
+  const [exerciseTotals, setExerciseTotals] = useState({});
+  const [showBadges, setShowBadges] = useState(false);
+
+
+
 
 useEffect(() => {
   const loadProgress = async () => {
     console.log("📦 Loading saved progress...");
 
     const { data, error } = await supabase
-      .from('progress')
-      .select('current_xp, current_rank')
-      .eq('user_id', '40f105cc-47d6-439a-9bad-4304386007e3')
-      .single();
+  .from('progress')
+  .select('current_xp, current_rank, exercise_totals')
+  .eq('user_id', '40f105cc-47d6-439a-9bad-4304386007e3')
+  .single();
+
 
     if (error && error.code === 'PGRST116') {
       // Row doesn't exist yet, insert default one
@@ -674,15 +680,27 @@ useEffect(() => {
       } else {
         console.log("✅ Default progress row created.");
       }
-    } else if (data) {
-      console.log("✅ Loaded progress from Supabase:", data);
-      setXp(data.current_xp);
-      setCurrentRankIndex(data.current_rank);
-      setViewRankIndex(data.current_rank);
-      setIsLoaded(true);
-    } else if (error) {
-      console.error("❌ Error loading progress:", error.message);
-    }
+   } else if (data) {
+  console.log("✅ Loaded progress from Supabase:", data);
+  setXp(data.current_xp);
+  setCurrentRankIndex(data.current_rank);
+  setViewRankIndex(data.current_rank);
+
+  // 👇 Initialize exerciseTotals with empty totals for each exercise
+  const totals = {};
+  RANKS.forEach(rank => {
+    rank.workouts.forEach(day => {
+      day.exercises.forEach(ex => {
+        if (!totals[ex.name]) totals[ex.name] = 0;
+      });
+    });
+  });
+  setExerciseTotals(data.exercise_totals || totals);
+
+
+  setIsLoaded(true);
+}
+
   };
 
   loadProgress();
@@ -697,10 +715,10 @@ useEffect(() => {
   }, [viewRankIndex, selectedDayIndex]);
   
 useEffect(() => {
-  if (!isLoaded) return; // ✅ Don't run this unless data has finished loading
+  if (!isLoaded) return;
 
   const saveProgress = async () => {
-    console.log('🔁 Trying to save to Supabase:', { xp, currentRankIndex });
+    console.log('🔁 Trying to save to Supabase:', { xp, currentRankIndex, exerciseTotals });
 
     const { error } = await supabase
       .from('progress')
@@ -708,6 +726,7 @@ useEffect(() => {
         user_id: '40f105cc-47d6-439a-9bad-4304386007e3',
         current_xp: xp,
         current_rank: currentRankIndex,
+        exercise_totals: exerciseTotals
       }, {
         onConflict: ['user_id']
       });
@@ -720,11 +739,7 @@ useEffect(() => {
   };
 
   saveProgress();
-}, [xp, currentRankIndex, isLoaded]); // ✅ Include isLoaded here
-
-
-
-
+}, [xp, currentRankIndex, exerciseTotals, isLoaded]);
 
 
   // Handle completing a workout day to gain XP
@@ -733,6 +748,20 @@ useEffect(() => {
     if (viewRankIndex !== currentRankIndex) return;
     // Calculate total XP gained as sum of reps entered
     const xpGained = repInputs.reduce((total, reps) => total + reps, 0);
+    const newTotals = { ...exerciseTotals };
+const exercises = RANKS[viewRankIndex].workouts[selectedDayIndex].exercises;
+
+exercises.forEach((exercise, i) => {
+  const reps = repInputs[i] || 0;
+  const name = exercise.name;
+  if (!newTotals[name]) newTotals[name] = 0;
+  newTotals[name] += reps;
+});
+
+console.log("📊 Updated exerciseTotals:", newTotals);
+setExerciseTotals(newTotals);
+
+
     if (xpGained <= 0) return; // no XP gained if no reps entered
     const oldRank = currentRankIndex;
     let newRank = currentRankIndex;
@@ -909,17 +938,95 @@ useEffect(() => {
         {/* Rank-up message (displayed only when rank increases) */}
         {rankUpMessage && <div className="rank-up-message">{rankUpMessage}</div>}
 
-        {/* XP Bar and Progress Info */}
-        <div className="xp-bar">
-          <div className="xp-info">
-            {xp}
-            {RANKS[currentRankIndex].xpNeeded ? <> / {RANKS[currentRankIndex].xpNeeded} XP</> : <> XP</>}
-            {RANKS[currentRankIndex].xpNeeded ? <> (Next: {nextRankName})</> : <> (Max Rank)</>}
-          </div>
-          <div className="progress-container">
-            <div className="progress-fill"></div>
-          </div>
-        </div>
+ {/* XP Bar and Progress Info */}
+<div className="xp-bar">
+  <div className="xp-info">
+    {xp}
+    {RANKS[currentRankIndex].xpNeeded ? <> / {RANKS[currentRankIndex].xpNeeded} XP</> : <> XP</>}
+    {RANKS[currentRankIndex].xpNeeded ? <> (Next: {nextRankName})</> : <> (Max Rank)</>}
+  </div>
+  <div className="progress-container">
+    <div className="progress-fill"></div>
+  </div>
+</div>
+<button
+  onClick={() => setShowBadges(prev => !prev)}
+  style={{
+    display: "block",
+    margin: "20px auto 10px",
+    padding: "10px 20px",
+    backgroundColor: "#007bff",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer"
+  }}
+>
+  {showBadges ? "Hide Badges" : "Show Badges"}
+</button>
+
+{/* Milestone Badge Progress Section */}
+<div
+  style={{
+    maxHeight: showBadges ? "1000px" : "0px",
+    opacity: showBadges ? 1 : 0,
+    overflow: "hidden",
+    pointerEvents: showBadges ? "auto" : "none",
+    transition: "max-height 0.4s ease, opacity 0.3s ease",
+    margin: showBadges ? "30px 0" : "0"
+  }}
+>
+  <div>
+    <h3 style={{ textAlign: "center", marginBottom: "10px" }}>🏅 Milestone Badges</h3>
+    {Object.entries(exerciseTotals)
+  .map(([exerciseName, totalReps]) => {
+    let nextGoal = 50;
+    let level = 0;
+
+    if (totalReps >= 150) {
+      level = 4;
+      nextGoal = 200;
+    } else if (totalReps >= 100) {
+      level = 3;
+      nextGoal = 150;
+    } else if (totalReps >= 75) {
+      level = 2;
+      nextGoal = 100;
+    } else if (totalReps >= 50) {
+      level = 1;
+      nextGoal = 75;
+    }
+
+    const percent = Math.min(100, Math.floor((totalReps / nextGoal) * 100));
+    const remaining = Math.max(0, nextGoal - totalReps);
+
+    return { exerciseName, totalReps, level, nextGoal, percent, remaining };
+  })
+  .sort((a, b) => a.remaining - b.remaining)
+  .map(({ exerciseName, totalReps, level, nextGoal, percent }) => (
+    <div key={exerciseName} style={{ marginBottom: "12px" }}>
+      <strong>
+  {exerciseName} Lv. {level} — {totalReps} / {nextGoal} ({percent}%)
+</strong>
+
+      <div style={{ height: "10px", background: "#ddd", borderRadius: "5px", overflow: "hidden" }}>
+        <div style={{
+          width: `${percent}%`,
+          height: "100%",
+          background: "#007bff",
+          transition: "width 0.3s"
+        }} />
+      </div>
+    </div>
+))}
+
+  </div>
+</div>
+
+
+
+
+
 
         {/* Rank selection and Day selection controls */}
         <div className="selectors">
