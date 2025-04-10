@@ -653,6 +653,9 @@ function App() {
   const [showBadges, setShowBadges] = useState(false);
   const [showHealthStats, setShowHealthStats] = useState(false);
   const [healthData, setHealthData] = useState(null);
+  const [nutritionData, setNutritionData] = useState(null);
+  const [showNutritionStats, setShowNutritionStats] = useState(false);
+
 
 
 
@@ -734,6 +737,31 @@ const loadHealthData = async () => {
 
 
 loadHealthData();
+const loadNutritionData = async () => {
+  console.log("🥗 Fetching nutrition data from Supabase...");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isoDate = today.toISOString();
+
+  const { data, error } = await supabase
+    .from('nutrition_data')
+    .select('*')
+    .eq('user_id', '40f105cc-47d6-439a-9bad-4304386007e3')
+    .gte('timestamp', isoDate)
+    .order('timestamp', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.error("❌ Error fetching nutrition data:", error.message);
+  } else if (data && data.length > 0) {
+    console.log("✅ Loaded today's nutrition data:", data[0]);
+    setNutritionData(data[0]);
+  } else {
+    console.log("❓ No nutrition data found for today.");
+  }
+};
+
+loadNutritionData();
 
 }, []);
 
@@ -1011,6 +1039,47 @@ setExerciseTotals(newTotals);
 >
   {showHealthStats ? "Hide Apple Health Stats" : "Show Apple Health Stats"}
 </button>
+<button
+  onClick={() => setShowNutritionStats(prev => !prev)}
+  style={{
+    display: "block",
+    margin: "10px auto 10px",
+    padding: "10px 20px",
+    backgroundColor: "#ff6f61",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer"
+  }}
+>
+  {showNutritionStats ? "Hide Nutrition Stats" : "Show Nutrition Stats"}
+</button>
+<div
+  style={{
+    maxHeight: showNutritionStats ? "1000px" : "0px",
+    opacity: showNutritionStats ? 1 : 0,
+    overflow: "hidden",
+    pointerEvents: showNutritionStats ? "auto" : "none",
+    transition: "max-height 0.4s ease, opacity 0.3s ease",
+    margin: showNutritionStats ? "30px 0" : "0"
+  }}
+>
+  <div>
+    <h3 style={{ textAlign: "center", marginBottom: "10px" }}>🍽️ Nutrition Today</h3>
+    {nutritionData ? (
+      <div>
+        <p><strong>Calories: </strong>{nutritionData.dietCalories ?? 0}</p>
+        <p><strong>Protein: </strong>{nutritionData.protein ?? 0}g</p>
+        <p><strong>Carbs: </strong>{nutritionData.carbs ?? 0}g</p>
+        <p><strong>Fat: </strong>{nutritionData.fat ?? 0}g</p>
+        <p><strong>Sugar: </strong>{nutritionData.sugar ?? 0}g</p>
+        <p><strong>Last Synced: </strong>{new Date(nutritionData.timestamp).toLocaleString()}</p>
+      </div>
+    ) : (
+      <p>Loading nutrition data...</p>
+    )}
+  </div>
+</div>
 
 <div
   style={{
@@ -1029,13 +1098,14 @@ setExerciseTotals(newTotals);
         <p><strong>Steps: </strong>{healthData.steps}</p>
         <p><strong>Active Calories: </strong>{healthData.activeCalories}</p>
         <p><strong>Move Goal: </strong>{healthData.moveGoal}</p>
-        <p><strong>Date: </strong>{new Date(healthData.timestamp).toLocaleString()}</p>
+        <p><strong>Last Synced: </strong>{new Date(healthData.timestamp).toLocaleString()}</p>
       </div>
     ) : (
       <p>Loading Apple Health data...</p>
     )}
   </div>
 </div>
+
 
 
 {/* Milestone Badge Progress Section */}
