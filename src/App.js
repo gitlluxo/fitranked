@@ -651,6 +651,8 @@ function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [exerciseTotals, setExerciseTotals] = useState({});
   const [showBadges, setShowBadges] = useState(false);
+  const [showHealthStats, setShowHealthStats] = useState(false);
+  const [healthData, setHealthData] = useState(null);
 
 
 
@@ -704,6 +706,35 @@ useEffect(() => {
   };
 
   loadProgress();
+const loadHealthData = async () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isoDate = today.toISOString();
+
+  console.log("🔍 Fetching health data from Supabase...");
+
+  const { data, error } = await supabase
+    .from('health_data')
+    .select('*')
+    .eq('user_id', '40f105cc-47d6-439a-9bad-4304386007e3')
+    .gte('timestamp', isoDate)
+    .order('timestamp', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.error('❌ Error fetching health data:', error.message);
+  } else if (data && data.length > 0) {
+    console.log("✅ Loaded health data:", data[0]);
+    setHealthData(data[0]);
+  } else {
+    console.log('❓ No data found for today.');
+  }
+};
+
+
+
+loadHealthData();
+
 }, []);
 
 
@@ -964,6 +995,48 @@ setExerciseTotals(newTotals);
 >
   {showBadges ? "Hide Badges" : "Show Badges"}
 </button>
+
+<button
+  onClick={() => setShowHealthStats(prev => !prev)}
+  style={{
+    display: "block",
+    margin: "10px auto 10px",
+    padding: "10px 20px",
+    backgroundColor: "#28a745",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer"
+  }}
+>
+  {showHealthStats ? "Hide Apple Health Stats" : "Show Apple Health Stats"}
+</button>
+
+<div
+  style={{
+    maxHeight: showHealthStats ? "1000px" : "0px",
+    opacity: showHealthStats ? 1 : 0,
+    overflow: "hidden",
+    pointerEvents: showHealthStats ? "auto" : "none",
+    transition: "max-height 0.4s ease, opacity 0.3s ease",
+    margin: showHealthStats ? "30px 0" : "0"
+  }}
+>
+  <div>
+    <h3 style={{ textAlign: "center", marginBottom: "10px" }}>🍏 Apple Health Stats</h3>
+    {healthData ? (
+      <div>
+        <p><strong>Steps: </strong>{healthData.steps}</p>
+        <p><strong>Active Calories: </strong>{healthData.activeCalories}</p>
+        <p><strong>Move Goal: </strong>{healthData.moveGoal}</p>
+        <p><strong>Date: </strong>{new Date(healthData.timestamp).toLocaleString()}</p>
+      </div>
+    ) : (
+      <p>Loading Apple Health data...</p>
+    )}
+  </div>
+</div>
+
 
 {/* Milestone Badge Progress Section */}
 <div
