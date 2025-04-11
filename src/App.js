@@ -1,5 +1,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
+import confetti from 'canvas-confetti';
+
 
 const tierColors = {
   Bronze: '#cd7f32',
@@ -13,9 +15,20 @@ const PROTEIN_GOAL = 120; // grams
 const MOVE_GOAL = 720; // active calories
 
 
+
+
+
 const calculateRingProgress = (value, goal) => {
   const percent = Math.min(100, (value / goal) * 100);
   return Math.floor(percent);
+};
+
+const launchConfetti = () => {
+  confetti({
+    particleCount: 100,
+    spread: 70,
+    origin: { y: 0.6 }
+  });
 };
 
 
@@ -655,12 +668,16 @@ function App() {
   const [currentRankIndex, setCurrentRankIndex] = useState(0);   // User's current rank index
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [viewRankIndex, setViewRankIndex] = useState(0);         // Currently viewed rank plan index
+  const [darkMode, setDarkMode] = useState(() => {
+  return localStorage.getItem("darkMode") === "true";
+});
   // We’ll control day via currentDayIndex instead
   const selectedDayIndex = currentDayIndex;
 
   const [xp, setXp] = useState(0);                               // Current XP accumulated
   const [repInputs, setRepInputs] = useState([]);                // Input values for reps per exercise on current day
   const [rankUpMessage, setRankUpMessage] = useState("");        // Rank-up congratulatory message (if any)
+  const [glowXpBar, setGlowXpBar] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [exerciseTotals, setExerciseTotals] = useState({});
   const [showBadges, setShowBadges] = useState(false);
@@ -817,6 +834,10 @@ useEffect(() => {
   saveProgress();
 }, [xp, currentRankIndex, currentDayIndex, exerciseTotals, isLoaded]);
 
+useEffect(() => {
+  localStorage.setItem("darkMode", darkMode);
+}, [darkMode]);
+
 
 const handleComplete = () => {
   if (viewRankIndex !== currentRankIndex) return;
@@ -852,6 +873,9 @@ const handleComplete = () => {
   setViewRankIndex(newRank);
   setCurrentDayIndex(0);
   setRankUpMessage(`🎉 Congratulations! You've reached ${RANKS[newRank].name}!`);
+  setGlowXpBar(true);
+  setTimeout(() => setGlowXpBar(false), 1000);
+  launchConfetti();
 } else {
   const totalDays = RANKS[currentRankIndex].workouts.length;
   const nextDay = (selectedDayIndex + 1) % totalDays;
@@ -904,6 +928,9 @@ console.log("🔍 Calculating XP for Log Only...");
   if (newRank !== oldRank) {
     setCurrentDayIndex(0); // reset day progression on rank-up
     setRankUpMessage(`🎉 Congratulations! You've reached ${RANKS[newRank].name}!`);
+    setGlowXpBar(true);
+    setTimeout(() => setGlowXpBar(false), 1000);
+    launchConfetti();
   } else {
     setRankUpMessage(""); // no message if no rank-up
   }
@@ -943,137 +970,171 @@ if (currentXpNeeded) {
     <>
       {/* Embedded basic CSS styling for the app */}
       <style>{`
-        body {
-          background: #f9f9f9;
-          margin: 0;
-          font-family: Arial, sans-serif;
-        }
-        .container {
-          max-width: 600px;
-          margin: 20px auto;
-          padding: 20px;
-        }
-        h1 {
-          text-align: center;
-          margin-bottom: 5px;
-        }
-        h2 {
-          text-align: center;
-          margin-top: 0;
-          font-size: 1.2em;
-        }
-        .rank-up-message {
-          text-align: center;
-          color: #28a745;
-          font-weight: bold;
-          margin: 10px 0;
-        }
-        .xp-bar {
-          margin: 20px 0;
-        }
-        .xp-info {
-          text-align: center;
-          font-weight: bold;
-          margin-bottom: 5px;
-        }
-        .progress-container {
-          background: #ddd;
-          border-radius: 10px;
-          overflow: hidden;
-          height: 20px;
-          width: 100%;
-        }
-        .progress-fill {
-          height: 100%;
-          width: ${progressPercent}%;
-          background-color: ${tierColors[currentTier]};
-          transition: width 0.3s;
-        }
-        .selectors {
-          margin-bottom: 20px;
-        }
-        .rank-selector {
-          margin: 5px 0;
-          text-align: center;
-        }
-        .rank-select {
-          margin-left: 5px;
-          padding: 5px;
-          border: 1px solid #aaa;
-          border-radius: 4px;
-        }
-        .day-selector {
-          text-align: center;
-          margin: 10px 0;
-        }
-        .day-selector span {
-          margin-right: 8px;
-          font-weight: bold;
-        }
-        .day-button {
-          padding: 5px 10px;
-          margin: 2px;
-          border: 1px solid #aaa;
-          border-radius: 4px;
-          background: #f0f0f0;
-          cursor: pointer;
-        }
-        .day-button:hover {
-          background: #e0e0e0;
-        }
-        .active-day {
-          background: #007bff;
-          color: #fff;
-          border-color: #007bff;
-        }
-        .active-day:hover {
-          background: #007bff;
-        }
-        .workout-plan h3 {
-          margin: 15px 0 10px;
-          font-size: 1.1em;
-          text-align: center;
-        }
-        .exercise-line {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          margin: 5px 0;
-        }
-        .exercise-line span {
-          flex: 1 1 60%;
-          margin-right: 10px;
-        }
-        .exercise-line input {
-          flex: 1 1 30%;
-          max-width: 60px;
-          margin-left: auto;
-          padding: 3px;
-          border: 1px solid #aaa;
-          border-radius: 4px;
-          text-align: center;
-        }
-        .complete-btn {
-          display: block;
-          width: 100%;
-          margin: 15px 0;
-          padding: 10px;
-          background: #007bff;
-          color: #fff;
-          font-size: 1em;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-        }
-        .complete-btn:hover {
-          background: #0069d9;
-        }
-      `}</style>
+  body {
+    background: ${darkMode ? "#121212" : "#f9f9f9"};
+    color: ${darkMode ? "#eee" : "#000"};
+    margin: 0;
+    font-family: Arial, sans-serif;
+    transition: background 0.3s, color 0.3s;
+  }
+  .container {
+    max-width: 600px;
+    margin: 20px auto;
+    padding: 20px;
+  }
+  h1, h2 {
+    text-align: center;
+  }
+  h2 {
+    font-size: 1.2em;
+  }
+  .rank-up-message {
+    text-align: center;
+    color: #28a745;
+    font-weight: bold;
+    margin: 10px 0;
+  }
+  .xp-bar {
+    margin: 20px 0;
+  }
+  .xp-info {
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+  .progress-container {
+    background: #555;
+    border-radius: 10px;
+    overflow: hidden;
+    height: 20px;
+    width: 100%;
+  }
+  .progress-fill {
+    height: 100%;
+    width: ${progressPercent}%;
+    background-color: ${tierColors[currentTier]};
+    transition: width 0.3s;
+  }
+  .selectors {
+    margin-bottom: 20px;
+  }
+  .rank-selector {
+    margin: 5px 0;
+    text-align: center;
+  }
+  .rank-select {
+    margin-left: 5px;
+    padding: 5px;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    background: ${darkMode ? "#333" : "#fff"};
+    color: ${darkMode ? "#eee" : "#000"};
+  }
+  .day-selector {
+    text-align: center;
+    margin: 10px 0;
+  }
+  .day-selector span {
+    margin-right: 8px;
+    font-weight: bold;
+  }
+  .day-button {
+    padding: 5px 10px;
+    margin: 2px;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    background: ${darkMode ? "#333" : "#f0f0f0"};
+    color: ${darkMode ? "#eee" : "#000"};
+    cursor: pointer;
+  }
+  .day-button:hover {
+    background: ${darkMode ? "#444" : "#e0e0e0"};
+  }
+  .active-day {
+    background: #007bff;
+    color: #fff;
+    border-color: #007bff;
+  }
+  .active-day:hover {
+    background: #007bff;
+  }
+  .workout-plan h3 {
+    margin: 15px 0 10px;
+    font-size: 1.1em;
+    text-align: center;
+  }
+  .exercise-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 5px 0;
+  }
+  .exercise-line span {
+    flex: 1 1 60%;
+    margin-right: 10px;
+  }
+  .exercise-line input {
+    flex: 1 1 30%;
+    max-width: 60px;
+    margin-left: auto;
+    padding: 3px;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    text-align: center;
+    background: ${darkMode ? "#222" : "white"};
+    color: ${darkMode ? "#eee" : "#000"};
+  }
+  .complete-btn {
+    display: block;
+    width: 100%;
+    margin: 15px 0;
+    padding: 10px;
+    background: #007bff;
+    color: #fff;
+    font-size: 1em;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .complete-btn:hover {
+    background: #0069d9;
+  }
+
+  @keyframes glow {
+    0% {
+      box-shadow: 0 0 10px 2px gold;
+    }
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+  }
+
+  .glow-rankup {
+    animation: glow 1s ease-out;
+  }
+`}</style>
+
 
       {/* Main Container for the app content */}
       <div className="container">
         {/* App Title and current rank display */}
         <h1>FitRanked</h1>
+        <button
+  onClick={() => setDarkMode(prev => !prev)}
+  style={{
+    margin: "10px auto",
+    padding: "6px 12px",
+    display: "block",
+    background: darkMode ? "#444" : "#ccc",
+    color: darkMode ? "white" : "black",
+    border: "1px solid #aaa",
+    borderRadius: "5px",
+    cursor: "pointer"
+  }}
+>
+  {darkMode ? "☀️ Light Mode" : "🌙 Dark Mode"}
+</button>
+
         <h2>Current Rank: {RANKS[currentRankIndex].name}</h2>
         {/* Rank-up message (displayed only when rank increases) */}
         {rankUpMessage && <div className="rank-up-message">{rankUpMessage}</div>}
@@ -1086,7 +1147,7 @@ if (currentXpNeeded) {
     {RANKS[currentRankIndex].xpNeeded ? <> (Next: {nextRankName})</> : <> (Max Rank)</>}
   </div>
   <div className="progress-container">
-    <div className="progress-fill"></div>
+    <div className={`progress-fill ${glowXpBar ? 'glow-rankup' : ''}`}></div>
   </div>
 </div>
 
