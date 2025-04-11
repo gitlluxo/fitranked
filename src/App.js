@@ -9,6 +9,14 @@ const tierColors = {
   Diamond: '#3498DB'
 };
 
+const PROTEIN_GOAL = 120; // grams
+
+const calculateRingProgress = (value, goal) => {
+  const percent = Math.min(100, (value / goal) * 100);
+  return Math.floor(percent);
+};
+
+
 // Full workout plans for all ranks (Bronze I to Diamond III), including XP needed for each next rank.
 const RANKS = [
   { name: "Bronze I", xpNeeded: 100, workouts: [
@@ -1008,6 +1016,54 @@ setExerciseTotals(newTotals);
     <div className="progress-fill"></div>
   </div>
 </div>
+
+{/* 🍗 Protein Ring with percentage */}
+<div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
+  <div style={{ textAlign: "center" }}>
+    <svg width="100" height="100">
+      <circle
+        cx="50"
+        cy="50"
+        r="40"
+        stroke="#ddd"
+        strokeWidth="10"
+        fill="none"
+      />
+      <circle
+        cx="50"
+        cy="50"
+        r="40"
+        stroke="#ff9500"
+        strokeWidth="10"
+        fill="none"
+        strokeDasharray={`${2 * Math.PI * 40}`}
+        strokeDashoffset={`${
+          2 * Math.PI * 40 *
+          (1 - calculateRingProgress(nutritionData?.protein ?? 0, PROTEIN_GOAL) / 100)
+        }`}
+        transform="rotate(-90 50 50)"
+        style={{ transition: "stroke-dashoffset 0.3s ease" }}
+      />
+      <text
+        x="50%"
+        y="50%"
+        textAnchor="middle"
+        dy="0.3em"
+        fontSize="13"
+        fill="#333"
+      >
+        {`${nutritionData?.protein ?? 0}g`}
+      </text>
+    </svg>
+    <div style={{ marginTop: "4px", fontSize: "14px", fontWeight: "bold" }}>
+      Protein ({calculateRingProgress(nutritionData?.protein ?? 0, PROTEIN_GOAL)}%)
+    </div>
+  </div>
+</div>
+
+
+
+
 <button
   onClick={() => setShowBadges(prev => !prev)}
   style={{
@@ -1054,32 +1110,7 @@ setExerciseTotals(newTotals);
 >
   {showNutritionStats ? "Hide Nutrition Stats" : "Show Nutrition Stats"}
 </button>
-<div
-  style={{
-    maxHeight: showNutritionStats ? "1000px" : "0px",
-    opacity: showNutritionStats ? 1 : 0,
-    overflow: "hidden",
-    pointerEvents: showNutritionStats ? "auto" : "none",
-    transition: "max-height 0.4s ease, opacity 0.3s ease",
-    margin: showNutritionStats ? "30px 0" : "0"
-  }}
->
-  <div>
-    <h3 style={{ textAlign: "center", marginBottom: "10px" }}>🍽️ Nutrition Today</h3>
-    {nutritionData ? (
-      <div>
-        <p><strong>Calories: </strong>{nutritionData.dietCalories ?? 0}</p>
-        <p><strong>Protein: </strong>{nutritionData.protein ?? 0}g</p>
-        <p><strong>Carbs: </strong>{nutritionData.carbs ?? 0}g</p>
-        <p><strong>Fat: </strong>{nutritionData.fat ?? 0}g</p>
-        <p><strong>Sugar: </strong>{nutritionData.sugar ?? 0}g</p>
-        <p><strong>Last Synced: </strong>{new Date(nutritionData.timestamp).toLocaleString()}</p>
-      </div>
-    ) : (
-      <p>Loading nutrition data...</p>
-    )}
-  </div>
-</div>
+
 
 <div
   style={{
@@ -1106,7 +1137,33 @@ setExerciseTotals(newTotals);
   </div>
 </div>
 
+<div
+  style={{
+    maxHeight: showNutritionStats ? "1000px" : "0px",
+    opacity: showNutritionStats ? 1 : 0,
+    overflow: "hidden",
+    pointerEvents: showNutritionStats ? "auto" : "none",
+    transition: "max-height 0.4s ease, opacity 0.3s ease",
+    margin: showNutritionStats ? "30px 0" : "0"
+  }}
+>
+  <div>
+    <h3 style={{ textAlign: "center", marginBottom: "10px" }}>🍽️ Nutrition Today</h3>
+    {nutritionData ? (
+  <div>
+    <p><strong>Calories: </strong>{nutritionData.dietCalories ?? 0}</p>
+    <p><strong>Protein: </strong>{nutritionData.protein ?? 0}g</p>
+    <p><strong>Carbs: </strong>{nutritionData.carbs ?? 0}g</p>
+    <p><strong>Fat: </strong>{nutritionData.fat ?? 0}g</p>
+    <p><strong>Sugar: </strong>{nutritionData.sugar ?? 0}g</p>
+    <p><strong>Last Synced: </strong>{new Date(nutritionData.timestamp).toLocaleString()}</p>
+  </div>
+) : (
+  <p>Loading nutrition data...</p>
+)}
 
+  </div>
+</div>
 
 {/* Milestone Badge Progress Section */}
 <div
