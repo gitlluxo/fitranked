@@ -653,8 +653,11 @@ const RANKS = [
 function App() {
   // State variables for current progress and viewing options
   const [currentRankIndex, setCurrentRankIndex] = useState(0);   // User's current rank index
+  const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [viewRankIndex, setViewRankIndex] = useState(0);         // Currently viewed rank plan index
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);   // Selected day index for workout plan
+  // We’ll control day via currentDayIndex instead
+  const selectedDayIndex = currentDayIndex;
+
   const [xp, setXp] = useState(0);                               // Current XP accumulated
   const [repInputs, setRepInputs] = useState([]);                // Input values for reps per exercise on current day
   const [rankUpMessage, setRankUpMessage] = useState("");        // Rank-up congratulatory message (if any)
@@ -665,6 +668,7 @@ function App() {
   const [healthData, setHealthData] = useState(null);
   const [nutritionData, setNutritionData] = useState(null);
   const [showNutritionStats, setShowNutritionStats] = useState(false);
+  
 
 
 
@@ -676,7 +680,7 @@ useEffect(() => {
 
     const { data, error } = await supabase
   .from('progress')
-  .select('current_xp, current_rank, exercise_totals')
+  .select('current_xp, current_rank, exercise_totals, current_day')
   .eq('user_id', '40f105cc-47d6-439a-9bad-4304386007e3')
   .single();
 
@@ -700,6 +704,8 @@ useEffect(() => {
   setXp(data.current_xp);
   setCurrentRankIndex(data.current_rank);
   setViewRankIndex(data.current_rank);
+  setCurrentDayIndex(data.current_day ?? 0);
+
 
   // 👇 Initialize exerciseTotals with empty totals for each exercise
   const totals = {};
@@ -795,6 +801,7 @@ useEffect(() => {
         user_id: '40f105cc-47d6-439a-9bad-4304386007e3',
         current_xp: xp,
         current_rank: currentRankIndex,
+        current_day: currentDayIndex,
         exercise_totals: exerciseTotals
       }, {
         onConflict: ['user_id']
@@ -808,65 +815,129 @@ useEffect(() => {
   };
 
   saveProgress();
-}, [xp, currentRankIndex, exerciseTotals, isLoaded]);
+}, [xp, currentRankIndex, currentDayIndex, exerciseTotals, isLoaded]);
 
 
-  // Handle completing a workout day to gain XP
-  const handleComplete = () => {
-    // Only allow XP gain if the viewed rank is the user's current rank
-    if (viewRankIndex !== currentRankIndex) return;
-    // Calculate total XP gained as sum of reps entered
-    const xpGained = repInputs.reduce((total, reps) => total + reps, 0);
-    const newTotals = { ...exerciseTotals };
-const exercises = RANKS[viewRankIndex].workouts[selectedDayIndex].exercises;
+const handleComplete = () => {
+  if (viewRankIndex !== currentRankIndex) return;
 
-exercises.forEach((exercise, i) => {
-  const reps = repInputs[i] || 0;
-  const name = exercise.name;
-  if (!newTotals[name]) newTotals[name] = 0;
-  newTotals[name] += reps;
-});
+  const xpGained = repInputs.reduce((total, reps) => total + reps, 0);
+  const newTotals = { ...exerciseTotals };
+  const exercises = RANKS[viewRankIndex].workouts[selectedDayIndex].exercises;
 
-console.log("📊 Updated exerciseTotals:", newTotals);
-setExerciseTotals(newTotals);
+  exercises.forEach((exercise, i) => {
+    const reps = repInputs[i] || 0;
+    const name = exercise.name;
+    if (!newTotals[name]) newTotals[name] = 0;
+    newTotals[name] += reps;
+  });
+
+  console.log("📊 Updated exerciseTotals:", newTotals);
+  setExerciseTotals(newTotals);
+
+  if (xpGained <= 0) return;
+
+  const oldRank = currentRankIndex;
+  let newRank = currentRankIndex;
+  let newXp = xp + xpGained;
+
+  while (newRank < RANKS.length - 1 && RANKS[newRank].xpNeeded && newXp >= RANKS[newRank].xpNeeded) {
+    newRank++;
+  }
+
+  setXp(newXp);
+
+  if (newRank !== oldRank) {
+  setCurrentRankIndex(newRank);
+  setViewRankIndex(newRank);
+  setCurrentDayIndex(0);
+  setRankUpMessage(`🎉 Congratulations! You've reached ${RANKS[newRank].name}!`);
+} else {
+  const totalDays = RANKS[currentRankIndex].workouts.length;
+  const nextDay = (selectedDayIndex + 1) % totalDays;
+  setCurrentDayIndex(nextDay);
+  setRankUpMessage(""); // clear any previous message
+}
 
 
-    if (xpGained <= 0) return; // no XP gained if no reps entered
+  setRepInputs(Array(repInputs.length).fill(0));
+};
+
+// Handle logging only (no XP or day change)
+const handleLogOnly = () => {
+  if (viewRankIndex !== currentRankIndex) return;
+
+  const newTotals = { ...exerciseTotals };
+  const exercises = RANKS[viewRankIndex].workouts[selectedDayIndex].exercises;
+
+  let xpGained = 0;
+console.log("🔍 Calculating XP for Log Only...");
+
+  exercises.forEach((exercise, i) => {
+    const reps = repInputs[i] || 0;
+    const name = exercise.name;
+    if (!newTotals[name]) newTotals[name] = 0;
+    newTotals[name] += reps;
+    xpGained += reps;
+    console.log("💥 XP to add from Log Only:", xpGained);
+
+  });
+
+  console.log("📊 Logged (XP but no advance):", newTotals);
+
     const oldRank = currentRankIndex;
-    let newRank = currentRankIndex;
-    let newXp = xp + xpGained;
-    // Check for rank-ups: if new XP meets or exceeds the threshold for the next rank, advance rank
-    while (newRank < RANKS.length - 1 && RANKS[newRank].xpNeeded && newXp >= RANKS[newRank].xpNeeded) {
-      newRank++;
-    }
-    setXp(newXp);
-    if (newRank !== oldRank) {
-      // If rank increased, update current rank and show rank-up message
-      setCurrentRankIndex(newRank);
-      setViewRankIndex(newRank);
-      setSelectedDayIndex(0);
-      setRankUpMessage(`🎉 Congratulations! You've reached ${RANKS[newRank].name}!`);
-    } else {
-      // No rank up, clear any previous messages
-      setRankUpMessage("");
-    }
-    // Reset input fields (for repeating the workout or moving to next day)
-    setRepInputs(Array(repInputs.length).fill(0));
-  };
+  let newRank = currentRankIndex;
+  let newXp = xp + xpGained;
+
+  while (newRank < RANKS.length - 1 && RANKS[newRank].xpNeeded && newXp >= RANKS[newRank].xpNeeded) {
+  newXp -= RANKS[newRank].xpNeeded;
+  newRank++;
+}
+
+
+  setExerciseTotals(newTotals);
+  setCurrentRankIndex(newRank);
+  setViewRankIndex(newRank);
+  setXp(newXp);
+  setRepInputs(Array(repInputs.length).fill(0));
+
+  if (newRank !== oldRank) {
+    setCurrentDayIndex(0); // reset day progression on rank-up
+    setRankUpMessage(`🎉 Congratulations! You've reached ${RANKS[newRank].name}!`);
+  } else {
+    setRankUpMessage(""); // no message if no rank-up
+  }
+
+};
 
   // Calculate XP progress percentage for the current rank (for progress bar fill)
   let progressPercent = 100;
-  if (RANKS[currentRankIndex].xpNeeded) {
-    const prevThreshold = currentRankIndex === 0 ? 0 : RANKS[currentRankIndex - 1].xpNeeded;
-    progressPercent = Math.floor(((xp - prevThreshold) / (RANKS[currentRankIndex].xpNeeded - prevThreshold)) * 100);
-    if (progressPercent > 100) progressPercent = 100;
-  }
+const currentXpNeeded = RANKS[currentRankIndex].xpNeeded;
+
+if (currentXpNeeded) {
+  progressPercent = Math.floor((xp / currentXpNeeded) * 100);
+  if (progressPercent > 100) progressPercent = 100;
+}
+
 
   // Determine current tier name (Bronze, Silver, Gold, etc.) for styling color
   const currentTier = RANKS[currentRankIndex].name.split(' ')[0];
 
   // Determine next rank name for display in XP info (if any)
   const nextRankName = currentRankIndex < RANKS.length - 1 ? RANKS[currentRankIndex + 1].name : null;
+  const canCompleteWorkout = () => {
+  const exercises = RANKS[currentRankIndex].workouts[currentDayIndex].exercises;
+
+  for (let i = 0; i < exercises.length; i++) {
+    const required = exercises[i].target;
+    const entered = repInputs[i] || 0;
+    if (entered < required) return false;
+  }
+
+  return true;
+};
+
+
 
   return (
     <>
@@ -1283,7 +1354,7 @@ setExerciseTotals(newTotals);
               value={viewRankIndex}
               onChange={(e) => {
                 setViewRankIndex(Number(e.target.value));
-                setSelectedDayIndex(0);
+                setCurrentDayIndex(0);
               }}
             >
               {RANKS.map((rank, i) => (
@@ -1296,56 +1367,76 @@ setExerciseTotals(newTotals);
 
           {/* Day Selector Buttons */}
           <div className="day-selector">
-            <span>Day:</span>
-            {RANKS[viewRankIndex].workouts.map((dayPlan, i) => (
-              <button
-                key={i}
-                type="button"
-                className={"day-button " + (i === selectedDayIndex ? 'active-day' : '')}
-                onClick={() => setSelectedDayIndex(i)}
-              >
-                {i + 1}
-              </button>
-            ))}
-          </div>
+  <span>Day:</span>
+  {RANKS[currentRankIndex].workouts.map((dayPlan, i) => (
+  <button
+    key={i}
+    type="button"
+    className={"day-button " + (i === currentDayIndex ? 'active-day' : '')}
+    disabled
+  >
+    {i + 1}
+  </button>
+))}
+
+</div>
+
         </div>
 
         {/* Workout Plan Display for the selected rank and day */}
         <div className="workout-plan">
           <h3>
-            {RANKS[viewRankIndex].name} &mdash; {RANKS[viewRankIndex].workouts[selectedDayIndex].day}
-          </h3>
-          <div className="exercises-list">
-            {RANKS[viewRankIndex].workouts[selectedDayIndex].exercises.map((exercise, idx) => (
-              <div className="exercise-line" key={idx}>
-                <span>
-                  {exercise.name} &mdash; {exercise.name === "Plank" ? `${exercise.target} sec` : `${exercise.target} reps`}
-                </span>
-                {/* Input field for reps appears only if viewing the current rank (to log progress) */}
-                {viewRankIndex === currentRankIndex && (
-                  <input
-                    type="number"
-                    min="0"
-                    value={repInputs[idx] || 0}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value);
-                      setRepInputs(prevInputs => {
-                        const newInputs = [...prevInputs];
-                        newInputs[idx] = isNaN(val) ? 0 : val;
-                        return newInputs;
-                      });
-                    }}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
+  {RANKS[currentRankIndex].name} &mdash; {RANKS[currentRankIndex].workouts[currentDayIndex].day}
+</h3>
+<div className="exercises-list">
+  {RANKS[currentRankIndex].workouts[currentDayIndex].exercises.map((exercise, idx) => (
+    <div className="exercise-line" key={idx}>
+      <span>
+        {exercise.name} &mdash; {exercise.name === "Plank" ? `${exercise.target} sec` : `${exercise.target} reps`}
+      </span>
+      <input
+        type="number"
+        min="0"
+        value={repInputs[idx] || 0}
+        onChange={(e) => {
+          const val = parseInt(e.target.value);
+          setRepInputs(prevInputs => {
+            const newInputs = [...prevInputs];
+            newInputs[idx] = isNaN(val) ? 0 : val;
+            return newInputs;
+          });
+        }}
+      />
+    </div>
+  ))}
+</div>
+
           {/* "Complete Workout" button appears only for current rank to gain XP */}
-          {viewRankIndex === currentRankIndex && (
-            <button className="complete-btn" onClick={handleComplete}>
-              Complete Workout
-            </button>
-          )}
+         {viewRankIndex === currentRankIndex && (
+  <>
+        <button
+      className="complete-btn"
+      onClick={handleComplete}
+      disabled={!canCompleteWorkout()}
+      style={{
+        opacity: canCompleteWorkout() ? 1 : 0.5,
+        cursor: canCompleteWorkout() ? "pointer" : "not-allowed"
+      }}
+    >
+      ✅ Complete Workout
+    </button>
+
+    <button
+      className="complete-btn"
+      onClick={handleLogOnly}
+      style={{ backgroundColor: "#6c757d" }}
+    >
+      📝 Log Only These Exercises
+    </button>
+  </>
+)}
+
+
         </div>
       </div>
     </>
