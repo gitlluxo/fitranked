@@ -1493,26 +1493,6 @@ if (currentXpNeeded) {
 
 
         {/* Rank selection and Day selection controls */}
-        <div className="selectors">
-          {/* Rank Selector Dropdown */}
-          <div className="rank-selector">
-            <label htmlFor="rankSelect">View Rank Plan:</label>
-            <select
-              id="rankSelect"
-              className="rank-select"
-              value={viewRankIndex}
-              onChange={(e) => {
-                setViewRankIndex(Number(e.target.value));
-                setCurrentDayIndex(0);
-              }}
-            >
-              {RANKS.map((rank, i) => (
-                <option value={i} key={i}>
-                  {rank.name}
-                </option>
-              ))}
-            </select>
-          </div>
 
           {/* Day Selector Buttons */}
           <div className="day-selector">
@@ -1529,8 +1509,6 @@ if (currentXpNeeded) {
 ))}
 
 </div>
-
-        </div>
 
         {/* Workout Plan Display for the selected rank and day */}
         <div className="workout-plan">
@@ -1585,9 +1563,8 @@ if (currentXpNeeded) {
   </>
 )}
 
-
         </div>
-      </div>
+        </div>
     </>
   );
 }
