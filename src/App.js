@@ -685,7 +685,8 @@ function App() {
   const [healthData, setHealthData] = useState(null);
   const [nutritionData, setNutritionData] = useState(null);
   const [showNutritionStats, setShowNutritionStats] = useState(false);
-  
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
 
 
 
@@ -1116,24 +1117,111 @@ if (currentXpNeeded) {
 
 
       {/* Main Container for the app content */}
-      <div className="container">
+{!settingsOpen && (
+  <button
+    onClick={() => setSettingsOpen(true)}
+    style={{
+      position: "fixed",
+      top: "15px",
+      left: "10px",
+      background: "transparent",
+      border: "none",
+      fontSize: "24px",
+      cursor: "pointer",
+      zIndex: 1101
+    }}
+  >
+    ☰
+  </button>
+)}
+
+
+
+
+
+<div className="container">
+
+
+      {settingsOpen && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "250px",
+      height: "100%",
+      background: darkMode ? "#222" : "#f5f5f5",
+      color: darkMode ? "white" : "black",
+      padding: "20px",
+      boxShadow: "2px 0 5px rgba(0,0,0,0.3)",
+      zIndex: 1000
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "20px" }}>
+  <button
+    onClick={() => setSettingsOpen(false)}
+    style={{
+      background: "transparent",
+      border: "none",
+      fontSize: "20px",
+      cursor: "pointer"
+    }}
+  >
+    ✖️
+  </button>
+  <h3 style={{ margin: 0 }}>Settings</h3>
+</div>
+
+
+    <div style={{ marginBottom: "15px" }}>
+      <label>
+        <input
+          type="checkbox"
+          checked={darkMode}
+          onChange={(e) => {
+            setDarkMode(e.target.checked);
+            localStorage.setItem("darkMode", e.target.checked);
+          }}
+        />
+        &nbsp; Dark Mode
+      </label>
+    </div>
+    <button
+      onClick={() => {
+        if (window.confirm("Are you sure you want to reset all progress?")) {
+          setXp(0);
+          setCurrentRankIndex(0);
+          setViewRankIndex(0);
+          setCurrentDayIndex(0);
+
+          const resetTotals = {};
+          RANKS.forEach(rank => {
+            rank.workouts.forEach(day => {
+              day.exercises.forEach(ex => {
+                resetTotals[ex.name] = 0;
+              });
+            });
+          });
+          setExerciseTotals(resetTotals);
+        }
+      }}
+      style={{
+        backgroundColor: "#dc3545",
+        color: "white",
+        padding: "8px 12px",
+        border: "none",
+        borderRadius: "4px",
+        cursor: "pointer"
+      }}
+    >
+      Reset All Progress
+    </button>
+  </div>
+)}
+
         {/* App Title and current rank display */}
         <h1>FitRanked</h1>
-        <button
-  onClick={() => setDarkMode(prev => !prev)}
-  style={{
-    margin: "10px auto",
-    padding: "6px 12px",
-    display: "block",
-    background: darkMode ? "#444" : "#ccc",
-    color: darkMode ? "white" : "black",
-    border: "1px solid #aaa",
-    borderRadius: "5px",
-    cursor: "pointer"
-  }}
->
-  {darkMode ? "☀️ Light Mode" : "🌙 Dark Mode"}
-</button>
+        
 
         <h2>Current Rank: {RANKS[currentRankIndex].name}</h2>
         {/* Rank-up message (displayed only when rank increases) */}
