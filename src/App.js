@@ -1,6 +1,8 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
+import NutritionChart from './components/NutritionChart';
+
 
 
 const tierColors = {
@@ -13,10 +15,6 @@ const tierColors = {
 
 const PROTEIN_GOAL = 120; // grams
 const MOVE_GOAL = 720; // active calories
-
-
-
-
 
 const calculateRingProgress = (value, goal) => {
   const percent = Math.min(100, (value / goal) * 100);
@@ -1324,6 +1322,23 @@ if (currentXpNeeded) {
     </div>
   </div>
 </div>
+
+{/*
+<div style={{ marginTop: "30px" }}>
+  <h3 style={{ textAlign: "center" }}>📊 Past 7 Days: Calories vs. Protein</h3>
+  <NutritionChart
+    data={[
+      { date: "Mon", activeCalories: 430, protein: 75 },
+      { date: "Tue", activeCalories: 580, protein: 92 },
+      { date: "Wed", activeCalories: 300, protein: 45 },
+      { date: "Thu", activeCalories: 720, protein: 128 },
+      { date: "Fri", activeCalories: 610, protein: 103 },
+      { date: "Sat", activeCalories: 690, protein: 117 },
+      { date: "Sun", activeCalories: 400, protein: 65 }
+    ]}
+  />
+</div>
+*/}
 
 
 
