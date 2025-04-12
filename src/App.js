@@ -1390,6 +1390,22 @@ if (currentXpNeeded) {
   {showNutritionStats ? "Hide Nutrition Stats" : "Show Nutrition Stats"}
 </button>
 
+<button
+  onClick={() => window.open("https://chat.openai.com/g/g-67fa2535ad048191982ec452e7d79f51-fitranked-coach", "_blank")}
+  style={{
+    display: "block",
+    margin: "10px auto",
+    padding: "10px 20px",
+    backgroundColor: "#6f42c1",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer"
+  }}
+>
+  💬 Ask FitRanked Coach (GPT)
+</button>
+
 
 <div
   style={{
