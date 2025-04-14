@@ -13,7 +13,7 @@ const tierColors = {
   Diamond: '#3498DB'
 };
 
-const PROTEIN_GOAL = 120; // grams
+const PROTEIN_GOAL = 180; // grams
 const MOVE_GOAL = 720; // active calories
 
 const calculateRingProgress = (value, goal) => {
@@ -1214,6 +1214,24 @@ if (currentXpNeeded) {
     >
       Reset All Progress
     </button>
+
+    <hr style={{ margin: "20px 0", borderColor: darkMode ? "#444" : "#ccc" }} />
+
+<a
+  href="https://www.freeprivacypolicy.com/live/49eeda0f-d173-4e47-adaf-94a18b82cb02"
+  target="_blank"
+  rel="noopener noreferrer"
+  style={{
+    display: "block",
+    color: darkMode ? "#ddd" : "#007bff",
+    fontWeight: "bold",
+    textDecoration: "none",
+    marginTop: "10px"
+  }}
+>
+  🔒 Privacy Policy
+</a>
+
   </div>
 )}
 

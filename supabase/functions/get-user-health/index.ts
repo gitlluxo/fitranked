@@ -16,6 +16,7 @@ serve(async (req) => {
     },
     body: JSON.stringify({ user_id_param: user_id })
 
+
   })
 
   const data = await response.json()
