@@ -1317,7 +1317,7 @@ if (currentXpNeeded) {
         textAnchor="middle"
         dy="0.3em"
         fontSize="13"
-        fill="#333"
+        fill={darkMode ? "#fff" : "#333"}
       >
         {`${healthData?.activeCalories ?? 0}`}
       </text>
@@ -1359,7 +1359,7 @@ if (currentXpNeeded) {
         textAnchor="middle"
         dy="0.3em"
         fontSize="13"
-        fill="#333"
+        fill={darkMode ? "#fff" : "#333"}
       >
         {`${nutritionData?.protein ?? 0}g`}
       </text>
@@ -1401,7 +1401,7 @@ if (currentXpNeeded) {
         textAnchor="middle"
         dy="0.3em"
         fontSize="13"
-        fill="#333"
+        fill={darkMode ? "#fff" : "#333"}
       >
         {sleepData && typeof sleepData.duration_hours === 'number'
           ? `${Math.floor(sleepData.duration_hours)}h ${Math.round((sleepData.duration_hours % 1) * 60)}m`
