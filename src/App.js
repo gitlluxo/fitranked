@@ -15,6 +15,7 @@ const tierColors = {
 
 const PROTEIN_GOAL = 180; // grams
 const MOVE_GOAL = 720; // active calories
+const SLEEP_GOAL = 8; // hours
 
 const calculateRingProgress = (value, goal) => {
   const percent = Math.min(100, (value / goal) * 100);
@@ -684,6 +685,7 @@ function App() {
   const [nutritionData, setNutritionData] = useState(null);
   const [showNutritionStats, setShowNutritionStats] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sleepData, setSleepData] = useState(null);
 
 
 
@@ -794,6 +796,33 @@ const loadNutritionData = async () => {
 };
 
 loadNutritionData();
+
+const loadSleepData = async () => {
+  console.log("🛌 Fetching sleep data...");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isoDate = today.toISOString();
+
+  const { data, error } = await supabase
+    .from('sleep_data')
+    .select('*')
+    .eq('user_id', '40f105cc-47d6-439a-9bad-4304386007e3')
+    .gte('inserted_at', isoDate)
+    .order('inserted_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.error("❌ Error fetching sleep data:", error.message);
+  } else if (data && data.length > 0) {
+    console.log("✅ Loaded today's sleep data:", data[0]);
+    console.log("⏰ duration_hours value:", data[0].duration_hours);
+    setSleepData(data[0]);
+  } else {
+    console.log("❓ No sleep data found for today.");
+  }
+};
+
+loadSleepData();
 
 }, []);
 
@@ -1339,6 +1368,50 @@ if (currentXpNeeded) {
       Protein ({calculateRingProgress(nutritionData?.protein ?? 0, PROTEIN_GOAL)}%)
     </div>
   </div>
+
+     {/* 🟣 Sleep Ring */}
+  <div style={{ textAlign: "center" }}>
+    <svg width="100" height="100">
+      <circle
+        cx="50"
+        cy="50"
+        r="40"
+        stroke="#ddd"
+        strokeWidth="10"
+        fill="none"
+      />
+      <circle
+        cx="50"
+        cy="50"
+        r="40"
+        stroke="#a259ff"
+        strokeWidth="10"
+        fill="none"
+        strokeDasharray={`${2 * Math.PI * 40}`}
+        strokeDashoffset={`${
+          2 * Math.PI * 40 *
+          (1 - calculateRingProgress(sleepData?.duration_hours ?? 0, SLEEP_GOAL) / 100)
+        }`}
+        transform="rotate(-90 50 50)"
+        style={{ transition: "stroke-dashoffset 0.3s ease" }}
+      />
+      <text
+        x="50%"
+        y="50%"
+        textAnchor="middle"
+        dy="0.3em"
+        fontSize="13"
+        fill="#333"
+      >
+        {sleepData && typeof sleepData.duration_hours === 'number'
+          ? `${Math.floor(sleepData.duration_hours)}h ${Math.round((sleepData.duration_hours % 1) * 60)}m`
+          : '0h'}
+      </text>
+    </svg>
+    <div style={{ marginTop: "4px", fontSize: "14px", fontWeight: "bold" }}>
+      Sleep ({calculateRingProgress(sleepData?.duration_hours ?? 0, SLEEP_GOAL)}%)
+    </div>
+  </div>     
 </div>
 
 {/*
