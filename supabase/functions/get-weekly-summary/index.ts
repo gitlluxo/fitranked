@@ -18,7 +18,7 @@ serve(async (req) => {
   const rangeStart = start.toISOString();
   const rangeEnd = end.toISOString();
 
-  const [nutritionRes, healthRes] = await Promise.all([
+  const [nutritionRes, healthRes, bodyMetricsRes, sleepRes] = await Promise.all([
     fetch(`${supabaseUrl}/rest/v1/nutrition_data?user_id=eq.${user_id}&timestamp=gte.${rangeStart}&timestamp=lte.${rangeEnd}&order=timestamp.asc`, {
       headers: {
         apikey: supabaseKey,
@@ -31,17 +31,89 @@ serve(async (req) => {
         Authorization: `Bearer ${supabaseKey}`,
       },
     }),
+    fetch(`${supabaseUrl}/rest/v1/rpc/fetch_user_body_metrics`, {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ user_id_param: user_id }),
+    }),
+    fetch(`${supabaseUrl}/rest/v1/sleep_data?user_id=eq.${user_id}&start_time=gte.${rangeStart}&end_time=lte.${rangeEnd}&order=start_time.asc`, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      },
+    }),
   ]);
+  
+  
 
   const nutrition = await nutritionRes.json();
   const health = await healthRes.json();
+  const body_metrics = await bodyMetricsRes.json();
+  const sleep = await sleepRes.json();
 
-  return new Response(JSON.stringify({
+  let totalSleepHours = 0;
+let sleepDays = 0;
+
+sleep.forEach(entry => {
+  if (entry.duration_hours && entry.duration_hours > 0) {
+    totalSleepHours += entry.duration_hours;
+    sleepDays += 1;
+  }
+});
+
+const averageSleepMinutes = sleepDays > 0
+  ? Math.round((totalSleepHours / sleepDays) * 60)
+  : 0;
+
+
+  // ----- XP bonus for hitting protein goal -----
+const proteinGoal = 120;
+let proteinGoalDays = 0;
+const seenDates = new Set();
+
+nutrition.forEach(entry => {
+  const day = new Date(entry.timestamp).toISOString().split("T")[0];
+  if (!seenDates.has(day) && entry.protein >= proteinGoal) {
+    seenDates.add(day);
+    proteinGoalDays += 1;
+  }
+});
+
+const bonusXpAwarded = proteinGoalDays >= 4 ? 25 : 0;
+
+if (bonusXpAwarded > 0) {
+  await fetch(`${supabaseUrl}/rest/v1/rpc/increment_xp`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      user_id_input: user_id,
+      xp_amount: bonusXpAwarded
+    })
+  });
+}
+
+
+return new Response(JSON.stringify({
     nutrition,
     health,
+    body_metrics,
     start: rangeStart,
-    end: rangeEnd
+    end: rangeEnd,
+    proteinGoalDays,
+    bonusXpAwarded,
+    averageSleepMinutes
   }), {
     headers: { "Content-Type": "application/json" }
   });
-});
+}); 
+
+
+

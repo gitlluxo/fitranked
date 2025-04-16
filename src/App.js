@@ -16,11 +16,70 @@ const tierColors = {
 const PROTEIN_GOAL = 180; // grams
 const MOVE_GOAL = 720; // active calories
 const SLEEP_GOAL = 8; // hours
+const HYDRATION_GOAL = 3700; // mL
+const HRV_GOAL = 65; // ms — this is a placeholder, adjust if needed
 
 const calculateRingProgress = (value, goal) => {
   const percent = Math.min(100, (value / goal) * 100);
   return Math.floor(percent);
 };
+
+const calculateAfterlineIndex = ({
+  hrv = 0,
+  resting_hr = 100,
+  cardio_recovery_bpm = 100,
+  sleep = 0,
+  sleep_avg = 7.5,
+  sleepConsistency = 50, // new: 0–100%
+  hydration = 0,
+  protein = 0,
+  prior_day_active_calories = 0
+}) => {
+  const sleepScore = Math.min(100, (sleep / sleep_avg) * 100);
+  const hydrationScore = Math.min(100, hydration);
+  const proteinScore = Math.min(100, protein);
+  const hrvScore = Math.min(100, (hrv / HRV_GOAL) * 100);
+  const cardioScore = Math.min(100, (cardio_recovery_bpm / 50) * 100); // ideal ≥50 bpm
+  const restingHRScore = Math.min(100, 100 - Math.max(0, resting_hr - 60)); // ideal ≤60 bpm
+  const moveScore = Math.min(100, (prior_day_active_calories / MOVE_GOAL) * 100);
+  const sleepConsistencyScore = Math.min(100, sleepConsistency); // already % based
+
+  const index =
+  hrvScore * 0.05 +
+  cardioScore * 0.05 +
+  restingHRScore * 0.15 +
+  sleepScore * 0.15 +
+  sleepConsistencyScore * 0.15 +      // new weight
+  hydrationScore * 0.20 +
+  proteinScore * 0.15 +
+  moveScore * 0.10;
+
+
+
+  return Math.round(index);
+};
+
+const calculateSleepConsistencyScore = (startTimes) => {
+  if (!startTimes || startTimes.length < 2) return 50;
+
+  // Convert bedtimes to minutes since midnight
+  const timesInMinutes = startTimes.map(dateStr => {
+    const date = new Date(dateStr);
+    return date.getHours() * 60 + date.getMinutes();
+  });
+
+  const mean = timesInMinutes.reduce((a, b) => a + b, 0) / timesInMinutes.length;
+  const variance = timesInMinutes.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / timesInMinutes.length;
+  const stddev = Math.sqrt(variance); // in minutes
+
+  // Consistency score drops with higher standard deviation
+  const maxStdDev = 90; // 1.5 hour window is "ok"
+  const score = Math.max(0, 100 - (stddev / maxStdDev) * 100);
+  return Math.round(score);
+};
+
+
+
 
 const launchConfetti = () => {
   confetti({
@@ -686,6 +745,10 @@ function App() {
   const [showNutritionStats, setShowNutritionStats] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sleepData, setSleepData] = useState(null);
+  const [bodyMetrics, setBodyMetrics] = useState(null);
+  const [sleepHistory, setSleepHistory] = useState([]);
+
+
 
 
 
@@ -797,35 +860,64 @@ const loadNutritionData = async () => {
 
 loadNutritionData();
 
-const loadSleepData = async () => {
-  console.log("🛌 Fetching sleep data...");
+
+const loadBodyMetricsData = async () => {
+  console.log("💓 Fetching body metrics from Supabase...");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const isoDate = today.toISOString();
 
   const { data, error } = await supabase
-    .from('sleep_data')
+    .from('body_metrics')
     .select('*')
     .eq('user_id', '40f105cc-47d6-439a-9bad-4304386007e3')
-    .gte('inserted_at', isoDate)
-    .order('inserted_at', { ascending: false })
-    .limit(1);
+    .gte('created_at', isoDate)
+  .order('created_at', { ascending: false })
+  .limit(1);
+
+  if (error) {
+    console.error("❌ Error fetching body metrics:", error.message);
+  } else if (data && data.length > 0) {
+    console.log("✅ Loaded today's body metrics:", data[0]);
+    setBodyMetrics(data[0]);
+  } else {
+    console.log("❓ No body metrics found for today.");
+  }
+};
+
+
+const loadSleepData = async () => {
+  console.log("🛌 Fetching sleep data...");
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 6); // 7 days total including today
+
+  const { data, error } = await supabase
+    .from('sleep_data')
+    .select('duration_hours, start_time, inserted_at')
+    .eq('user_id', '40f105cc-47d6-439a-9bad-4304386007e3')
+    .gte('inserted_at', sevenDaysAgo.toISOString())
+    .order('inserted_at', { ascending: true });
 
   if (error) {
     console.error("❌ Error fetching sleep data:", error.message);
   } else if (data && data.length > 0) {
-    console.log("✅ Loaded today's sleep data:", data[0]);
-    console.log("⏰ duration_hours value:", data[0].duration_hours);
-    setSleepData(data[0]);
+    console.log("✅ Loaded sleep history:", data);
+    console.log("🧠 Sleep Consistency Score:", calculateSleepConsistencyScore(sleepHistory));
+    setSleepData(data[data.length - 1]); // today's sleep data
+    setSleepHistory(data.map(entry => entry.start_time)); // collect start times
   } else {
-    console.log("❓ No sleep data found for today.");
+    console.log("❓ No sleep data found for past week.");
   }
 };
 
+
 loadSleepData();
+loadBodyMetricsData();
 
 }, []);
-
 
 
   // Reset input fields whenever the viewed rank or day changes
@@ -891,8 +983,10 @@ const handleComplete = () => {
   let newXp = xp + xpGained;
 
   while (newRank < RANKS.length - 1 && RANKS[newRank].xpNeeded && newXp >= RANKS[newRank].xpNeeded) {
+    newXp -= RANKS[newRank].xpNeeded;
     newRank++;
   }
+  
 
   setXp(newXp);
 
@@ -980,6 +1074,28 @@ if (currentXpNeeded) {
 
   // Determine next rank name for display in XP info (if any)
   const nextRankName = currentRankIndex < RANKS.length - 1 ? RANKS[currentRankIndex + 1].name : null;
+  console.log("🥤 Hydration mL:", nutritionData?.water_ml);
+  console.log("🍗 Protein g:", nutritionData?.protein);
+  console.log("🔥 Active Calories:", healthData?.activeCalories);
+  console.log("🧠 Sleep Duration:", sleepData?.duration_hours);
+  console.log("🕒 Sleep Start Times:", sleepHistory);
+  console.log("🧮 Calculated Sleep Consistency:", calculateSleepConsistencyScore(sleepHistory));
+
+  const afterlineIndex = calculateAfterlineIndex({
+    hrv: bodyMetrics?.hrv_ms ?? 0,
+    resting_hr: bodyMetrics?.resting_heart_rate ?? 100,
+    cardio_recovery_bpm: bodyMetrics?.cardio_recovery_bpm ?? 100,
+    sleep: sleepData?.duration_hours ?? 0,
+    sleep_avg: 7.5,
+    sleepConsistency: calculateSleepConsistencyScore(sleepHistory),
+    hydration: (nutritionData?.water_ml ?? 0) / HYDRATION_GOAL * 100,
+    protein: (nutritionData?.protein ?? 0) / PROTEIN_GOAL * 100,
+    prior_day_active_calories: healthData?.activeCalories ?? 0
+  });
+  
+  
+  
+  
   const canCompleteWorkout = () => {
   const exercises = RANKS[currentRankIndex].workouts[currentDayIndex].exercises;
 
@@ -1284,135 +1400,168 @@ if (currentXpNeeded) {
   </div>
 </div>
 
-<div style={{ display: "flex", justifyContent: "center", gap: "40px", marginBottom: "20px" }}>
-  {/* 🔴 Move Ring (active calories) */}
-  <div style={{ textAlign: "center" }}>
-    <svg width="100" height="100">
-      <circle
-        cx="50"
-        cy="50"
-        r="40"
-        stroke="#ddd"
-        strokeWidth="10"
-        fill="none"
-      />
-      <circle
-        cx="50"
-        cy="50"
-        r="40"
-        stroke="#ff3b30"
-        strokeWidth="10"
-        fill="none"
-        strokeDasharray={`${2 * Math.PI * 40}`}
-        strokeDashoffset={`${
-          2 * Math.PI * 40 *
-          (1 - calculateRingProgress(healthData?.activeCalories ?? 0, MOVE_GOAL) / 100)
-        }`}
-        transform="rotate(-90 50 50)"
-        style={{ transition: "stroke-dashoffset 0.3s ease" }}
-      />
-      <text
-        x="50%"
-        y="50%"
-        textAnchor="middle"
-        dy="0.3em"
-        fontSize="13"
-        fill={darkMode ? "#fff" : "#333"}
-      >
-        {`${healthData?.activeCalories ?? 0}`}
-      </text>
-    </svg>
-    <div style={{ marginTop: "4px", fontSize: "14px", fontWeight: "bold" }}>
-      Move ({calculateRingProgress(healthData?.activeCalories ?? 0, MOVE_GOAL)}%)
+{/* NEW RING LAYOUT: 3 on top, 2 centered below */}
+<div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "30px" }}>
+  {/* Top Row */}
+  <div style={{ display: "flex", gap: "40px", justifyContent: "center", flexWrap: "wrap" }}>
+    {/* 🔴 Move Ring */}
+    <div style={{ textAlign: "center" }}>
+      <svg width="100" height="100">
+        <circle cx="50" cy="50" r="40" stroke="#ddd" strokeWidth="10" fill="none" />
+        <circle
+          cx="50"
+          cy="50"
+          r="40"
+          stroke="#ff3b30"
+          strokeWidth="10"
+          fill="none"
+          strokeDasharray={`${2 * Math.PI * 40}`}
+          strokeDashoffset={`${
+            2 * Math.PI * 40 *
+            (1 - calculateRingProgress(healthData?.activeCalories ?? 0, MOVE_GOAL) / 100)
+          }`}
+          transform="rotate(-90 50 50)"
+          style={{ transition: "stroke-dashoffset 0.3s ease" }}
+        />
+        <text x="50%" y="50%" textAnchor="middle" dy="0.3em" fontSize="13" fill={darkMode ? "#fff" : "#333"}>
+          {`${healthData?.activeCalories ?? 0}`}
+        </text>
+      </svg>
+      <div style={{ marginTop: "4px", fontSize: "14px", fontWeight: "bold" }}>
+        Move ({calculateRingProgress(healthData?.activeCalories ?? 0, MOVE_GOAL)}%)
+      </div>
+    </div>
+
+    {/* 🟠 Protein Ring */}
+    <div style={{ textAlign: "center" }}>
+      <svg width="100" height="100">
+        <circle cx="50" cy="50" r="40" stroke="#ddd" strokeWidth="10" fill="none" />
+        <circle
+          cx="50"
+          cy="50"
+          r="40"
+          stroke="#ff9500"
+          strokeWidth="10"
+          fill="none"
+          strokeDasharray={`${2 * Math.PI * 40}`}
+          strokeDashoffset={`${
+            2 * Math.PI * 40 *
+            (1 - calculateRingProgress(nutritionData?.protein ?? 0, PROTEIN_GOAL) / 100)
+          }`}
+          transform="rotate(-90 50 50)"
+          style={{ transition: "stroke-dashoffset 0.3s ease" }}
+        />
+        <text x="50%" y="50%" textAnchor="middle" dy="0.3em" fontSize="13" fill={darkMode ? "#fff" : "#333"}>
+          {`${nutritionData?.protein ?? 0}g`}
+        </text>
+      </svg>
+      <div style={{ marginTop: "4px", fontSize: "14px", fontWeight: "bold" }}>
+        Protein ({calculateRingProgress(nutritionData?.protein ?? 0, PROTEIN_GOAL)}%)
+      </div>
+    </div>
+
+    {/* 💧 Hydration Ring */}
+    <div style={{ textAlign: "center" }}>
+      <svg width="100" height="100">
+        <circle cx="50" cy="50" r="40" stroke="#ddd" strokeWidth="10" fill="none" />
+        <circle
+          cx="50"
+          cy="50"
+          r="40"
+          stroke="#4aa5f0"
+          strokeWidth="10"
+          fill="none"
+          strokeDasharray={`${2 * Math.PI * 40}`}
+          strokeDashoffset={`${
+            2 * Math.PI * 40 *
+            (1 - calculateRingProgress(nutritionData?.water_ml ?? 0, HYDRATION_GOAL) / 100)
+          }`}
+          transform="rotate(-90 50 50)"
+          style={{ transition: "stroke-dashoffset 0.3s ease" }}
+        />
+        <text x="50%" y="50%" textAnchor="middle" dy="0.3em" fontSize="13" fill={darkMode ? "#fff" : "#333"}>
+          {`${nutritionData?.water_ml ?? 0}mL`}
+        </text>
+      </svg>
+      <div style={{ marginTop: "4px", fontSize: "14px", fontWeight: "bold" }}>
+        Hydration ({calculateRingProgress(nutritionData?.water_ml ?? 0, HYDRATION_GOAL)}%)
+      </div>
     </div>
   </div>
 
-  {/* 🟠 Protein Ring */}
-  <div style={{ textAlign: "center" }}>
-    <svg width="100" height="100">
-      <circle
-        cx="50"
-        cy="50"
-        r="40"
-        stroke="#ddd"
-        strokeWidth="10"
-        fill="none"
-      />
-      <circle
-        cx="50"
-        cy="50"
-        r="40"
-        stroke="#ff9500"
-        strokeWidth="10"
-        fill="none"
-        strokeDasharray={`${2 * Math.PI * 40}`}
-        strokeDashoffset={`${
-          2 * Math.PI * 40 *
-          (1 - calculateRingProgress(nutritionData?.protein ?? 0, PROTEIN_GOAL) / 100)
-        }`}
-        transform="rotate(-90 50 50)"
-        style={{ transition: "stroke-dashoffset 0.3s ease" }}
-      />
-      <text
-        x="50%"
-        y="50%"
-        textAnchor="middle"
-        dy="0.3em"
-        fontSize="13"
-        fill={darkMode ? "#fff" : "#333"}
-      >
-        {`${nutritionData?.protein ?? 0}g`}
-      </text>
-    </svg>
-    <div style={{ marginTop: "4px", fontSize: "14px", fontWeight: "bold" }}>
-      Protein ({calculateRingProgress(nutritionData?.protein ?? 0, PROTEIN_GOAL)}%)
+  {/* Bottom Row */}
+  <div style={{ display: "flex", gap: "40px", marginTop: "30px", justifyContent: "center" }}>
+    {/* 🟣 Sleep Ring */}
+    <div style={{ textAlign: "center" }}>
+      <svg width="100" height="100">
+        <circle cx="50" cy="50" r="40" stroke="#ddd" strokeWidth="10" fill="none" />
+        <circle
+          cx="50"
+          cy="50"
+          r="40"
+          stroke="#a259ff"
+          strokeWidth="10"
+          fill="none"
+          strokeDasharray={`${2 * Math.PI * 40}`}
+          strokeDashoffset={`${
+            2 * Math.PI * 40 *
+            (1 - calculateRingProgress(sleepData?.duration_hours ?? 0, SLEEP_GOAL) / 100)
+          }`}
+          transform="rotate(-90 50 50)"
+          style={{ transition: "stroke-dashoffset 0.3s ease" }}
+        />
+        <text x="50%" y="50%" textAnchor="middle" dy="0.3em" fontSize="13" fill={darkMode ? "#fff" : "#333"}>
+          {sleepData && typeof sleepData.duration_hours === 'number'
+            ? `${Math.floor(sleepData.duration_hours)}h ${Math.round((sleepData.duration_hours % 1) * 60)}m`
+            : '0h'}
+        </text>
+      </svg>
+      <div style={{ marginTop: "4px", fontSize: "14px", fontWeight: "bold" }}>
+        Sleep ({calculateRingProgress(sleepData?.duration_hours ?? 0, SLEEP_GOAL)}%)
+      </div>
+    </div>
+
+    {/* 🧠 Afterline Index Ring */}
+    <div style={{ textAlign: "center" }}>
+      <svg width="100" height="100">
+        <circle cx="50" cy="50" r="40" stroke="#ddd" strokeWidth="10" fill="none" />
+        <circle
+          cx="50"
+          cy="50"
+          r="40"
+          stroke={
+            afterlineIndex >= 70 ? "#28a745" :
+            afterlineIndex >= 40 ? "#ffc107" :
+            "#dc3545"
+          }
+          strokeWidth="10"
+          fill="none"
+          strokeDasharray={`${2 * Math.PI * 40}`}
+          strokeDashoffset={`${
+            2 * Math.PI * 40 *
+            (1 - afterlineIndex / 100)
+          }`}
+          transform="rotate(-90 50 50)"
+          style={{ transition: "stroke-dashoffset 0.3s ease" }}
+        />
+        <text x="50%" y="50%" textAnchor="middle" dy="0.3em" fontSize="14" fill={darkMode ? "#fff" : "#333"}>
+          {afterlineIndex}
+        </text>
+      </svg>
+      <div style={{ marginTop: "4px", fontSize: "14px", fontWeight: "bold" }}>
+        Afterline Index
+      </div>
+      <div style={{ fontSize: "12px", color: darkMode ? "#aaa" : "#555" }}>
+        {afterlineIndex >= 70
+          ? "Optimized"
+          : afterlineIndex >= 40
+          ? "Steady"
+          : "Recovery Needed"}
+      </div>
     </div>
   </div>
-
-     {/* 🟣 Sleep Ring */}
-  <div style={{ textAlign: "center" }}>
-    <svg width="100" height="100">
-      <circle
-        cx="50"
-        cy="50"
-        r="40"
-        stroke="#ddd"
-        strokeWidth="10"
-        fill="none"
-      />
-      <circle
-        cx="50"
-        cy="50"
-        r="40"
-        stroke="#a259ff"
-        strokeWidth="10"
-        fill="none"
-        strokeDasharray={`${2 * Math.PI * 40}`}
-        strokeDashoffset={`${
-          2 * Math.PI * 40 *
-          (1 - calculateRingProgress(sleepData?.duration_hours ?? 0, SLEEP_GOAL) / 100)
-        }`}
-        transform="rotate(-90 50 50)"
-        style={{ transition: "stroke-dashoffset 0.3s ease" }}
-      />
-      <text
-        x="50%"
-        y="50%"
-        textAnchor="middle"
-        dy="0.3em"
-        fontSize="13"
-        fill={darkMode ? "#fff" : "#333"}
-      >
-        {sleepData && typeof sleepData.duration_hours === 'number'
-          ? `${Math.floor(sleepData.duration_hours)}h ${Math.round((sleepData.duration_hours % 1) * 60)}m`
-          : '0h'}
-      </text>
-    </svg>
-    <div style={{ marginTop: "4px", fontSize: "14px", fontWeight: "bold" }}>
-      Sleep ({calculateRingProgress(sleepData?.duration_hours ?? 0, SLEEP_GOAL)}%)
-    </div>
-  </div>     
 </div>
+
 
 {/*
 <div style={{ marginTop: "30px" }}>
@@ -1430,9 +1579,6 @@ if (currentXpNeeded) {
   />
 </div>
 */}
-
-
-
 
 <button
   onClick={() => setShowBadges(prev => !prev)}
